@@ -1,0 +1,14 @@
+name: Build (SANDBOX)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      ENVIRONMENT: sandbox
+    secrets: inherit

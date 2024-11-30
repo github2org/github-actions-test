@@ -1,0 +1,14 @@
+name: Build (PROD)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      ENVIRONMENT: production
+    secrets: inherit
