@@ -15,9 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branch:
-          - dev
-          - main
+        branch: [dev, main]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -44,29 +42,29 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}      
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           TAG_SUFFIX=""
-          if [ "${{ matrix.branch }}" == "dev" ]; then
+          if [[ "${{ matrix.branch }}" == "dev" ]]; then
             TAG_SUFFIX=".dev"
           fi
-          IMAGE_TAG=${VERSION}${TAG_SUFFIX}
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG_SUFFIX} .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${TAG_SUFFIX}
+          IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
+          echo "Final Image Tag: $IMAGE_TAG"
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Push Git Tag
         if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
         run: |
           TAG_SUFFIX=""
-          if [ "${{ matrix.branch }}" == "dev" ]; then
+          if [[ "${{ matrix.branch }}" == "dev" ]]; then
             TAG_SUFFIX=".dev"
           fi
-          IMAGE_TAG=${VERSION}${TAG_SUFFIX}
+          IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag $IMAGE_TAG
           git push origin $IMAGE_TAG
-
 
 
 
