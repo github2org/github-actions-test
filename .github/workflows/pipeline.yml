@@ -34,9 +34,14 @@ jobs:
       - name: Extract Version
         id: version
         run: |
-          VERSION=$(sed -nE 's/^\s*version = "(.*?)"$/\1/p' release.json)
+          VERSION=$(sed -nE 's/^\s*"version": "(.*?)",?$/\1/p' release.json)
+          if [[ -z "$VERSION" ]]; then
+            echo "Error: Could not extract version from release.json"
+            exit 1
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Image Version: $VERSION"
+
 
       - name: Build and Push Docker Image
         id: build-image
