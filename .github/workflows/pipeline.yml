@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    if: github.ref_name == matrix.branch
     strategy:
       matrix:
         branch: [dev, main]
