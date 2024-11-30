@@ -7,8 +7,8 @@ on:
       - main
 
 env:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: github-actions-test
+  AWS_REGION: ${{ env.AWS_REGION }}
+  ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
 
 jobs:
   build-and-push-image:
