@@ -51,9 +51,8 @@ jobs:
             TAG_SUFFIX=".dev"
           fi
           IMAGE_TAG=${VERSION}${TAG_SUFFIX}
-          docker build -t $ECR_ACCOUNT_URL/${{ secrets.REPO_NAME }}:latest${TAG_SUFFIX} .
-          docker tag $ECR_ACCOUNT_URL/${{ secrets.REPO_NAME }}:latest${TAG_SUFFIX} $ECR_ACCOUNT_URL/${{ secrets.REPO_NAME }}:$IMAGE_TAG
-          docker push $ECR_ACCOUNT_URL/${{ secrets.REPO_NAME }}:$IMAGE_TAG
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG_SUFFIX} .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${TAG_SUFFIX}
 
       - name: Push Git Tag
         if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/master'
