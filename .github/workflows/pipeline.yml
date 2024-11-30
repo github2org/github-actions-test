@@ -1,14 +1,19 @@
-name: AWS ECS Deployment
+name: Build docker image and upload to ECR
 
 on:
-  push:
-    branches:
-      - dev
-      - main
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        type: string
+        required: true
 
 jobs:
-  build-and-push-image:
+  build:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.ENVIRONMENT }}
+    defaults:
+      run:
+        working-directory: ./
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -74,6 +79,86 @@ jobs:
 
 
 
+
+
+################     workable code ****** #########################
+
+# name: AWS ECS Deployment
+
+# on:
+#   push:
+#     branches:
+#       - dev
+#       - main
+
+# jobs:
+#   build-and-push-image:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       - name: Set Branch
+#         id: set-branch
+#         run: echo "BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
+
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+#           aws-region: ${{ vars.AWS_REGION }}
+
+#       - name: Login to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v1
+
+#       - name: Extract Version
+#         id: version
+#         run: |
+#           VERSION=$(sed -nE 's/^\s*"version": "(.*?)",?$/\1/p' release.json)
+#           if [[ -z "$VERSION" ]]; then
+#             echo "Error: Could not extract version from release.json"
+#             exit 1
+#           fi
+#           echo "VERSION=$VERSION" >> $GITHUB_ENV
+#           echo "Image Version: $VERSION"
+
+#       - name: Build and Push Docker Image
+#         if: env.BRANCH == 'dev'
+#         env:
+#           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+#         run: |
+#           TAG_SUFFIX=".dev"
+#           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
+#           echo "Final Image Tag: $IMAGE_TAG"
+#           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+#           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+#       - name: Build and Push Docker Image for Main
+#         if: env.BRANCH == 'main'
+#         env:
+#           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+#         run: |
+#           IMAGE_TAG="${VERSION}"
+#           echo "Final Image Tag: $IMAGE_TAG"
+#           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+#           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+#       - name: Push Git Tag
+#         env:
+#           TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}
+#         run: |
+#           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
+#           git config user.name "GitHub Actions"
+#           git config user.email "actions@github.com"
+#           git tag $IMAGE_TAG
+#           git push origin $IMAGE_TAG
+
+
+################     workable code ****** #########################
 
 
 # name: AWS ECS Deployment
