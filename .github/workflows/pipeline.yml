@@ -100,7 +100,6 @@ jobs:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: test-mf-dev-mutual-funds
           cluster: test-dev-cluster
-          wait-for-service-stability: true
 
 
 
