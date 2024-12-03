@@ -89,30 +89,31 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Fetch ECS Task Definition
+      - name: Fetch Current Task Definition
         id: fetch-task-def
         run: |
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
           echo "TASK_DEFINITION=$TASK_DEFINITION" >> $GITHUB_ENV
 
-      - name: Update ECS Task Definition with New Image
+      - name: Update Task Definition Image
         id: update-task-def
         run: |
-          echo "Updating ECS Task Definition..."
-          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}"
-          TASK_DEFINITION_JSON=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE" \
-            '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) |
-            .containerDefinitions[0].image = $IMAGE')
-          echo $TASK_DEFINITION_JSON > new-task-def.json
-          aws ecs register-task-definition --cli-input-json file://new-task-def.json
+          NEW_IMAGE="${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ env.VERSION }}"
+          NEW_TASK_DEFINITION=$(echo "${{ env.TASK_DEFINITION }}" | jq --arg IMAGE "$NEW_IMAGE" \
+          '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | .containerDefinitions[0].image = $IMAGE')
+          echo "$NEW_TASK_DEFINITION" > updated-task-def.json
+
+      - name: Register New Task Definition
+        run: |
+          aws ecs register-task-definition --cli-input-json file://updated-task-def.json
 
       - name: Update ECS Service
-        if: ${{ env.BRANCH == 'dev' }}
         run: |
           aws ecs update-service \
             --cluster test-dev-cluster \
             --service test-mf-dev-mutual-funds \
             --task-definition test-mf-dev-mf-nginx-task-def
+
 
 
 
