@@ -94,7 +94,7 @@ jobs:
         run: |
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
           NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}" \
-            '.taskDefinition | .containerDefinitions[0].image = $IMAGE | del(.status, .taskDefinitionArn, .revision, .requiresAttributes, .compatibilities)')
+          '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | containerDefinitions[0].image = $IMAGE')
           echo $NEW_TASK_DEFINITION > new-task-def-1.json
           aws ecs register-task-definition --cli-input-json file://new-task-def-1.json
 
