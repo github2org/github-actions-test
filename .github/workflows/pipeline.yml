@@ -71,7 +71,7 @@ jobs:
 
       - name: Push Git Tag
         env:
-          TAG_SUFFIX: ${{ github.ref_name == 'refs/heads/dev' && '.dev' || '' }}
+          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}
         run: |
           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           git config user.name "GitHub Actions"
@@ -80,28 +80,29 @@ jobs:
           git push origin $IMAGE_TAG
 
 
-      - name: Download Task Definition
-        if: ${{ env.BRANCH == 'dev' }}
-        run: |
-          aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def --query taskDefinition > task-definition.json
-          
-      - name: Fill in new Image ID in Task Definition
-        if: ${{ env.BRANCH == 'dev' }}
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: test-mf-dev-container
-          image: ${{ steps.build-image.outputs.image }}
 
-      - name: Deploy Amazon ECS Task Definition
-        if: ${{ env.BRANCH == 'dev' }}
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: test-mf-dev-mutual-funds
-          cluster: test-dev-cluster
-          wait-for-service-stability: true
+      # - name: Download Task Definition
+      #   if: ${{ env.BRANCH == 'dev' }}
+      #   run: |
+      #     aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def --query taskDefinition > task-definition.json
+          
+      # - name: Fill in new Image ID in Task Definition
+      #   if: ${{ env.BRANCH == 'dev' }}
+      #   id: task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: task-definition.json
+      #     container-name: test-mf-dev-container
+      #     image: ${{ steps.build-image.outputs.image }}
+
+      # - name: Deploy Amazon ECS Task Definition
+      #   if: ${{ env.BRANCH == 'dev' }}
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      #   with:
+      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
+      #     service: test-mf-dev-mutual-funds
+      #     cluster: test-dev-cluster
+      #     wait-for-service-stability: true
 
 
 
