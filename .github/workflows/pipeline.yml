@@ -46,6 +46,7 @@ jobs:
 
       - name: Build and Push Docker Image for Dev
         if: ${{ env.BRANCH == 'dev' }}
+        id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -55,6 +56,7 @@ jobs:
           echo "Final Image Tag: $IMAGE_TAG"
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Build and Push Docker Image for Main
         if: ${{ env.BRANCH == 'main' }}
@@ -65,17 +67,20 @@ jobs:
           IMAGE_TAG="${VERSION}"
           echo "Final Image Tag: $IMAGE_TAG"
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Push Git Tag
         env:
-          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}
+          TAG_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
         run: |
           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag $IMAGE_TAG
           git push origin $IMAGE_TAG
+
 
   deploy:
     needs: build
@@ -89,81 +94,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Download current task definition 
+      - name: Download task definition 
         run: |
-          aws ecs describe-task-definition \
-            --task-definition test-mf-dev-mf-nginx-task-def \
-            --query taskDefinition > task-definition.json
-
+          aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def --query taskDefinition > task-definition.json
+          
       - name: Fill in new image ID in task definition
         id: task-def
-        run: |
-          IMAGE_TAG="${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ steps.version.outputs.VERSION }}"
-          echo "Updating Task Definition with image: $IMAGE_TAG"
-          jq --arg IMAGE "$IMAGE_TAG" \
-            '.containerDefinitions[0].image = $IMAGE' task-definition.json > updated-task-def.json
-
-      - name: Debug updated task definition
-        run: |
-          cat updated-task-def.json  # Debug the updated task definition JSON
-
-      - name: Register new task definition
-        id: register-task-def
-        run: |
-          TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+         task-definition: task-definition.json 
+         container-name: test-mf-dev-container
+         image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy Amazon ECS task definition
-        run: |
-          aws ecs update-service \
-            --cluster test-dev-cluster \
-            --service test-mf-dev-mutual-funds \
-            --task-definition ${{ env.TASK_DEFINITION_ARN }}
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1 
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: test-mf-dev-mutual-funds
+          cluster: test-dev-cluster
 
-
-
-
-
-
-
-
-
-
-
-
-
-  # deploy:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   environment: ${{ inputs.ENVIRONMENT }}
-  #   steps:
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v2
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-  #         aws-region: ${{ vars.AWS_REGION }}
-
-  #     - name: Download task definition 
-  #       run: |
-  #         aws ecs describe-task-definition - task-definition test-mf-dev-mf-nginx-task-def - query taskDefinition > task-definition.json
-  #     - name: Fill in new image ID in task definition
-  #       id: task-def
-  #       uses: aws-actions/amazon-ecs-render-task-definition@v1
-  #       with:
-  #        task-definition: task-definition.json 
-  #        container-name: test-mf-dev-container
-  #        image: ${{ steps.build-image.outputs.image }}
-
-  #     - name: Deploy Amazon ECS task definition
-  #       uses: aws-actions/amazon-ecs-deploy-task-definition@v1 
-  #       with:
-  #         task-definition: ${{ steps.task-def.outputs.task-definition }}
-  #         service: test-mf-dev-mutual-funds
-  #         cluster: test-dev-cluster
 
 
 
