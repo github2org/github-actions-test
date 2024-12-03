@@ -15,7 +15,7 @@ jobs:
       run:
         working-directory: ./  
     outputs:
-      image: ${{ steps.build-image.outputs.image }} # This sets the output to use in the deploy job
+      image: ${{ steps.build-image.outputs.image }}  # Set image as output here
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -58,8 +58,8 @@ jobs:
           echo "Final Image Tag: $IMAGE_TAG"
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
-          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"  # Set image output here
 
       - name: Build and Push Docker Image for Main
         if: ${{ env.BRANCH == 'main' }}
@@ -86,7 +86,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build  # Make sure this job depends on the 'build' job
+    needs: build  # This ensures that 'deploy' job runs after 'build'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -108,7 +108,7 @@ jobs:
         with:
           task-definition: task-definition.json 
           container-name: test-mf-dev-container
-          image: ${{ needs.build.outputs.image }}  # Accessing the output image from the 'build' job
+          image: ${{ needs.build.outputs.image }}  # This references the image output from the build job
 
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -117,6 +117,7 @@ jobs:
           service: test-mf-dev-mutual-funds
           cluster: test-dev-cluster
           wait-for-service-stability: true
+
 
 
 
