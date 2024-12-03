@@ -77,45 +77,39 @@ jobs:
           git tag $IMAGE_TAG
           git push origin $IMAGE_TAG
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.ENVIRONMENT }}
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  environment: ${{ inputs.ENVIRONMENT }}
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Get Latest Task Definition
-        id: get-task-def
-        run: |
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
-          echo "TASK_DEFINITION=$TASK_DEFINITION"  # For debugging purposes, verify this output
+    - name: Update ECS Task Definition
+      id: update-task-def
+      run: |
+        TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
 
-      - name: Update Task Definition with New Image
-        id: update-task-def
-        run: |
-          # Fetch current task definition and update the image
-          NEW_IMAGE="${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ env.VERSION }}${{ env.BRANCH == 'dev' && '.dev' || '' }}"
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$NEW_IMAGE" \
-            '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | .containerDefinitions[0].image = $IMAGE')
+        # Update the container image in the task definition
+        UPDATED_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ env.VERSION }}${{ env.ENVIRONMENT == 'dev' && '.dev' || '' }}" \
+        '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | containerDefinitions[0].image = $IMAGE')
 
-          echo $NEW_TASK_DEFINITION > updated-task-def.json
+        # Save the updated task definition
+        echo $UPDATED_TASK_DEFINITION > updated-task-def.json
 
-          # Register the new task definition
-          REGISTER_RESULT=$(aws ecs register-task-definition --cli-input-json file://updated-task-def.json)
-          echo "REGISTER_RESULT=$REGISTER_RESULT"  # Debugging output for task registration result
+        # Register the updated task definition with ECS
+        aws ecs register-task-definition --cli-input-json file://updated-task-def.json
 
-      - name: Update Service with New Task Definition
-        if: ${{ success() }}
-        run: |
-          aws ecs update-service \
-            --cluster test-dev-cluster \
-            --service test-mf-dev-mutual-funds \
-            --task-definition test-mf-dev-mf-nginx-task-def
+    - name: Update ECS Service
+      run: |
+        aws ecs update-service \
+          --cluster test-dev-cluster \
+          --service test-mf-dev-mutual-funds \
+          --task-definition test-mf-dev-mf-nginx-task-def
 
 
 
