@@ -45,7 +45,7 @@ jobs:
           echo "Image Version: $VERSION"
 
       - name: Build and Push Docker Image for Dev
-        if: ${{ env.BRANCH == 'dev' }}  # Only for dev branch
+        if: ${{ env.BRANCH == 'dev' }}  # Corrected condition for dev branch
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -57,7 +57,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Build and Push Docker Image for Main
-        if: ${{ env.BRANCH == 'main' }}  # Only for main branch
+        if: ${{ env.BRANCH == 'main' }}  # Corrected condition for main branch
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -69,7 +69,7 @@ jobs:
 
       - name: Push Git Tag
         env:
-          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}  # Tag only for dev branch
+          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}  # Push tag only if branch is dev
         run: |
           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           git config user.name "GitHub Actions"
@@ -92,26 +92,27 @@ jobs:
       - name: Update Task Definition for Service 1
         id: update-task-def-1
         run: |
+          # Fetch current task definition
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
-          
-          # Handle jq for updating the task definition
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}" \
-          '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) |
-            .containerDefinitions[0].image = $IMAGE')
-          
+
+          # Update task definition with the new image tag
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}${{ env.BRANCH == 'dev' && '.dev' || '' }}" \
+          '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | .containerDefinitions[0].image = $IMAGE')
+
           # Save the updated task definition to a new file
           echo $NEW_TASK_DEFINITION > new-task-def-1.json
-          
+
           # Register the new task definition
           aws ecs register-task-definition --cli-input-json file://new-task-def-1.json
 
       - name: Update Service 1 for Dev
-        if: ${{ env.BRANCH == 'dev' }}  # Only for dev branch
+        if: ${{ env.BRANCH == 'dev' }}  # Only update ECS service for dev branch
         run: |
           aws ecs update-service \
             --cluster test-dev-cluster \
             --service test-mf-dev-mutual-funds \
             --task-definition test-mf-dev-mf-nginx-task-def
+
 
 
 
