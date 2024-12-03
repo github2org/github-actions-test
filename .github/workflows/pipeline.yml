@@ -45,7 +45,7 @@ jobs:
           echo "Image Version: $VERSION"
 
       - name: Build and Push Docker Image for Dev
-        if: ${{ env.BRANCH == 'dev' }}  # Corrected condition for dev branch
+        if: ${{ env.BRANCH == 'dev' }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -53,23 +53,23 @@ jobs:
           TAG_SUFFIX=".dev"
           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           echo "Final Image Tag: $IMAGE_TAG"
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build -t $ECR_REGISTRY/github-actions-test:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/github-actions-test:$IMAGE_TAG
 
       - name: Build and Push Docker Image for Main
-        if: ${{ env.BRANCH == 'main' }}  # Corrected condition for main branch
+        if: ${{ env.BRANCH == 'main' }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
         run: |
           IMAGE_TAG="${VERSION}"
           echo "Final Image Tag: $IMAGE_TAG"
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build -t $ECR_REGISTRY/github-actions-test:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/github-actions-test:$IMAGE_TAG
 
       - name: Push Git Tag
         env:
-          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}  # Push tag only if branch is dev
+          TAG_SUFFIX: ${{ env.BRANCH == 'dev' && '.dev' || '' }}
         run: |
           IMAGE_TAG="${VERSION}${TAG_SUFFIX}"
           git config user.name "GitHub Actions"
@@ -89,29 +89,34 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Update Task Definition for Service 1
-        id: update-task-def-1
+      - name: Get Latest Task Definition
+        id: get-task-def
         run: |
-          # Fetch current task definition
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def)
+          echo "TASK_DEFINITION=$TASK_DEFINITION"  # For debugging purposes, verify this output
 
-          # Update task definition with the new image tag
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}${{ env.BRANCH == 'dev' && '.dev' || '' }}" \
-          '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | .containerDefinitions[0].image = $IMAGE')
+      - name: Update Task Definition with New Image
+        id: update-task-def
+        run: |
+          # Fetch current task definition and update the image
+          NEW_IMAGE="${{ steps.login-ecr.outputs.registry }}/github-actions-test:${{ env.VERSION }}${{ env.BRANCH == 'dev' && '.dev' || '' }}"
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$NEW_IMAGE" \
+            '.taskDefinition | del(.status, .taskDefinitionArn, .revision, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities) | .containerDefinitions[0].image = $IMAGE')
 
-          # Save the updated task definition to a new file
-          echo $NEW_TASK_DEFINITION > new-task-def-1.json
+          echo $NEW_TASK_DEFINITION > updated-task-def.json
 
           # Register the new task definition
-          aws ecs register-task-definition --cli-input-json file://new-task-def-1.json
+          REGISTER_RESULT=$(aws ecs register-task-definition --cli-input-json file://updated-task-def.json)
+          echo "REGISTER_RESULT=$REGISTER_RESULT"  # Debugging output for task registration result
 
-      - name: Update Service 1 for Dev
-        if: ${{ env.BRANCH == 'dev' }}  # Only update ECS service for dev branch
+      - name: Update Service with New Task Definition
+        if: ${{ success() }}
         run: |
           aws ecs update-service \
             --cluster test-dev-cluster \
             --service test-mf-dev-mutual-funds \
             --task-definition test-mf-dev-mf-nginx-task-def
+
 
 
 
