@@ -62,7 +62,7 @@ jobs:
   update-task-definition:
     needs: build
     runs-on: ubuntu-latest
-    if: env.BRANCH == 'dev'
+    if: ${{ env.BRANCH == 'dev' }}
     steps:
       - name: Update ECS Task Definition
         env:
@@ -81,7 +81,7 @@ jobs:
   update-service:
     needs: update-task-definition
     runs-on: ubuntu-latest
-    if: env.BRANCH == 'dev'
+    if: ${{ env.BRANCH == 'dev' }}
     steps:
       - name: Update ECS Service
         env:
