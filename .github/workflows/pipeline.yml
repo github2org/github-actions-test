@@ -89,32 +89,30 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Download task definition
+      - name: Download task definition 
         run: |
-          aws ecs describe-task-definition \
-            --task-definition test-mf-dev-mf-nginx-task-def \
-            --query "taskDefinition" \
-            --output json > task-definition.json
+          aws ecs describe-task-definition --task-definition test-mf-dev-mf-nginx-task-def --query "taskDefinition" > task-definition.json
+
+      - name: Remove unwanted parameters from task definition
+        run: |
+          jq 'del(.taskDefinitionArn, .revision, .status, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities)' task-definition.json > updated-task-def.json
 
       - name: Fill in new image ID in task definition
-        id: task-def
         run: |
-          NEW_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ env.VERSION }}"
-          jq --arg IMAGE "$NEW_IMAGE" \
-            '.taskDefinition.containerDefinitions[0].image = $IMAGE' \
-            task-definition.json > updated-task-def.json
-          cat updated-task-def.json
+          jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE' updated-task-def.json > final-task-def.json
 
-      - name: Register new task definition
+      - name: Register new ECS task definition
+        id: register-task-def
         run: |
-          aws ecs register-task-definition --cli-input-json file://updated-task-def.json
+          aws ecs register-task-definition --cli-input-json file://final-task-def.json
 
-      - name: Deploy Amazon ECS task definition
+      - name: Update ECS service with new task definition
         run: |
           aws ecs update-service \
             --cluster test-dev-cluster \
             --service test-mf-dev-mutual-funds \
-            --task-definition test-mf-dev-mf-nginx-task-def
+            --task-definition ${{ steps.register-task-def.outputs.task-definition-arn }}
+
 
 
 
