@@ -13,15 +13,16 @@ docker buildx build --platform linux/amd64 \
   -t lambda-layer \
   --load .
 
+echo "🔍 Debug: Listing /opt/python contents inside container"
+docker run --rm lambda-layer ls -l /opt/python || echo "❌ /opt/python missing or empty"
+
 echo "📦 Extracting dependencies from Docker container..."
 docker run --rm -v "$PWD:/output" \
   --entrypoint /bin/bash \
   lambda-layer -c "mkdir -p /output/${LAYER_DIR} && cp -r /opt/python/* /output/${LAYER_DIR}"
 
-# ✅ Verify that python directory exists
 if [ ! -d "python" ]; then
   echo "❌ Error: python/ directory was not created. The layer may not contain any dependencies."
-  echo "👉 Check your Dockerfile or requirements.txt to ensure packages are being installed into /opt/python."
   exit 1
 fi
 
@@ -40,7 +41,6 @@ cd ..
 
 echo "✅ Lambda layer package created: lambda_layer.zip"
 
-# Optional cleanup
 rm -rf python
 
 echo "🎉 Done!"
