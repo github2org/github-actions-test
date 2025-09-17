@@ -1,7 +1,12 @@
-FROM python:3.9-alpine
-WORKDIR /<github-repo>
-ENV  MSG="Hello World!"
-COPY . .
-RUN pip3 install -r requirement.txt
-EXPOSE 5000
-CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0"]
+FROM python:3.13-slim 
+
+WORKDIR /opt
+
+ARG REQ_FILE=requirements.txt
+
+COPY ${REQ_FILE} requirements.txt
+
+RUN pip install --no-deps --no-cache-dir -r requirements.txt -t python/ && \
+    rm -rf $(ls -d python/* | grep tests) || true && \
+    rm -rf $(ls -d python/* | grep __pycache__) || true && \
+    find python/ -name "*.py[co]" -delete || true
