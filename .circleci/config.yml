@@ -6,7 +6,7 @@ orbs:
 jobs:
   deploy:
     docker:
-      - image: cimg/python:3.10  # CircleCI maintained Python image
+      - image: cimg/python:3.13  # CircleCI maintained Python image
     steps:
       - checkout
 
