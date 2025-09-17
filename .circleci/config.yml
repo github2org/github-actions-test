@@ -6,9 +6,11 @@ orbs:
 jobs:
   deploy:
     docker:
-      - image: cimg/python:3.10  
+      - image: cimg/python:3.10  # CircleCI maintained Python image
     steps:
       - checkout
+
+      - setup_remote_docker  # Removed version key to use default supported Docker version
 
       - run:
           name: Install AWS CLI
@@ -21,84 +23,99 @@ jobs:
             aws --version
 
       - run:
-          name: Fetch full git history (for diff)
+          name: Fetch full Git history
           command: |
             git fetch --unshallow || true
 
       - run:
-          name: Deploy Lambdas on folder changes
+          name: Smart Deploy - Lambda Functions and Layer
           command: |
-            # Lambda function names
-            DATA_CLEAN_FN="clairvoy-dev-data-clean-lambda"
-            DATA_LOAD_FN="clairvoy-dev-data-load-lambda"
-            DATA_PREP_FN="clairvoy-dev-data-prep-and-upload-lambda"
-            LAYER_NAME="clairvoy-dev-lambda-dependencies"
+            set -e  # exit on error
 
-            # Get changed files
+            # Function names and Layer name
+            DATA_CLEAN_FN="owl-uat-data-clean-lambda"
+            DATA_LOAD_FN="owl-uat-data-load-lambda"
+            DATA_PREP_FN="owl-uat-data-prep-and-upload-lambda"
+            LAYER_NAME="owl-uat-lambda-dependencies"
+
+            # Detect changed files in the last commit
             CHANGED_FILES=$(git diff --name-only $CIRCLE_SHA1 $CIRCLE_SHA1~1)
             echo "Changed files:"
             echo "$CHANGED_FILES"
 
-            # Deploy data_clean Lambda
+            # Rebuild and deploy layer if relevant files changed
+            if echo "$CHANGED_FILES" | grep -Eq "^deploy.sh$|^requirements\.txt$|^Dockerfile$"; then
+              echo "Layer-related changes detected. Running deploy.sh..."
+
+              chmod +x deploy.sh
+              ./deploy.sh
+
+              if [ -f "lambda_layer.zip" ]; then
+                echo "lambda_layer.zip created. Publishing new Lambda layer..."
+
+                aws lambda publish-layer-version \
+                  --layer-name "$LAYER_NAME" \
+                  --zip-file fileb://lambda_layer.zip \
+                  --region "$AWS_DEFAULT_REGION"
+
+                # Get latest layer version ARN
+                LAYER_VERSION_ARN=$(aws lambda list-layer-versions \
+                  --layer-name "$LAYER_NAME" \
+                  --query 'LayerVersions[0].LayerVersionArn' \
+                  --output text \
+                  --region "$AWS_DEFAULT_REGION")
+
+                echo "Updating Lambda functions to use new layer version"
+
+                for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
+                  aws lambda update-function-configuration \
+                    --function-name "$fn" \
+                    --layers "$LAYER_VERSION_ARN" \
+                    --region "$AWS_DEFAULT_REGION"
+                done
+              else
+                echo "Error: lambda_layer.zip not found after deploy.sh"
+                exit 1
+              fi
+            else
+              echo "No changes to Lambda layer detected."
+            fi
+
+            # Deploy individual Lambdas if their folders changed
             if echo "$CHANGED_FILES" | grep -q "^data_clean/"; then
-              echo "Deploying data_clean lambda..."
+              echo "Deploying data_clean Lambda..."
               cd data_clean
               zip -r ../data_clean.zip .
               cd ..
               aws lambda update-function-code \
-                --function-name $DATA_CLEAN_FN \
+                --function-name "$DATA_CLEAN_FN" \
                 --zip-file fileb://data_clean.zip \
-                --region $AWS_DEFAULT_REGION
+                --region "$AWS_DEFAULT_REGION"
             fi
 
-            # Deploy data_load Lambda
             if echo "$CHANGED_FILES" | grep -q "^data_load/"; then
-              echo "Deploying data_load lambda..."
+              echo "Deploying data_load Lambda..."
               cd data_load
               zip -r ../data_load.zip .
               cd ..
               aws lambda update-function-code \
-                --function-name $DATA_LOAD_FN \
+                --function-name "$DATA_LOAD_FN" \
                 --zip-file fileb://data_load.zip \
-                --region $AWS_DEFAULT_REGION
+                --region "$AWS_DEFAULT_REGION"
             fi
 
-            # Deploy data_prep Lambda
             if echo "$CHANGED_FILES" | grep -q "^data_prep/"; then
-              echo "Deploying data_prep lambda..."
+              echo "Deploying data_prep Lambda..."
               cd data_prep
               zip -r ../data_prep.zip .
               cd ..
               aws lambda update-function-code \
-                --function-name $DATA_PREP_FN \
+                --function-name "$DATA_PREP_FN" \
                 --zip-file fileb://data_prep.zip \
-                --region $AWS_DEFAULT_REGION
+                --region "$AWS_DEFAULT_REGION"
             fi
 
-            # Update Lambda Layer
-            if echo "$CHANGED_FILES" | grep -q "^lambda_layer.zip$"; then
-              echo "Publishing new Lambda layer version..."
-              aws lambda publish-layer-version \
-                --layer-name $LAYER_NAME \
-                --zip-file fileb://lambda_layer.zip \
-                --region $AWS_DEFAULT_REGION
-
-              # Get latest layer version ARN
-              LAYER_VERSION_ARN=$(aws lambda list-layer-versions \
-                --layer-name $LAYER_NAME \
-                --query 'LayerVersions[0].LayerVersionArn' \
-                --output text \
-                --region $AWS_DEFAULT_REGION)
-
-              echo "Updating all lambdas to use new layer version: $LAYER_VERSION_ARN"
-
-              for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
-                aws lambda update-function-configuration \
-                  --function-name "$fn" \
-                  --layers "$LAYER_VERSION_ARN" \
-                  --region $AWS_DEFAULT_REGION
-              done
-            fi
+            echo "✅ Deployment complete."
 
 workflows:
   version: 2
