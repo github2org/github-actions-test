@@ -44,11 +44,11 @@ jobs:
             echo "$CHANGED_FILES"
 
             # Rebuild and deploy layer if relevant files changed
-            if echo "$CHANGED_FILES" | grep -Eq "^deploy.sh$|^requirements\.txt$|^Dockerfile$"; then
+            if echo "$CHANGED_FILES" | grep -Eq "^build_layer.sh$|^requirements\.txt$|^Dockerfile$"; then
               echo "Layer-related changes detected. Running deploy.sh..."
 
-              chmod +x deploy.sh
-              ./deploy.sh
+              chmod +x build_layer.sh
+              ./build_layer.sh
 
               if [ -f "lambda_layer.zip" ]; then
                 echo "lambda_layer.zip created. Publishing new Lambda layer..."
