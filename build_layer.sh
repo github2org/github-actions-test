@@ -6,9 +6,11 @@ mkdir -p python/python/lib/python3.13/site-packages
 
 # Build Docker image with layer deps
 docker buildx build --platform linux/amd64 \
+  --no-cache \  # <--- This is mandatory!
   --build-arg REQ_FILE=requirements.txt \
   -t lambda-layer \
   --load .
+
 
 # Copy the installed packages from Docker to host
 docker run --rm -v "$PWD/python/python/lib/python3.13/site-packages:/output" \
