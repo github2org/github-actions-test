@@ -6,7 +6,7 @@ mkdir -p python/python/lib/python3.13/site-packages
 
 # Build Docker image with layer deps
 docker buildx build --platform linux/amd64 \
-  --no-cache \  # <--- This is mandatory!
+  --no-cache \
   --build-arg REQ_FILE=requirements.txt \
   -t lambda-layer \
   --load .
