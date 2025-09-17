@@ -40,6 +40,7 @@ zip -r ../lambda_layer.zip . > /dev/null
 cd ..
 
 echo "✅ Lambda layer package created: lambda_layer.zip"
+echo "Yess"
 
 rm -rf python
 
