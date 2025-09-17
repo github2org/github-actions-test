@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-mkdir -p python/python/lib/python3.13/site-packages
-
 docker buildx build --platform linux/amd64 \
   --build-arg REQ_FILE=requirements.txt \
   -t lambda-layer \
@@ -10,7 +8,7 @@ docker buildx build --platform linux/amd64 \
 
 docker run --rm -v "$PWD:/output" \
   --entrypoint /bin/bash \
-  lambda-layer -c "cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
+  lambda-layer -c "mkdir -p /output/python/python/lib/python3.13/site-packages && cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
 
 # Remove test folders
 find python/ -type d -iname "tests" -exec rm -rf {} +
