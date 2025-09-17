@@ -30,6 +30,7 @@ find python/ -type d -name "*.dist-info" -exec rm -rf {} +
 find python/ -type d -name "*.egg-info" -exec rm -rf {} +
 
 echo NOONOANONAOANO
+echo YESSS
 cd python
 zip -r ../lambda_layer.zip .
 cd ..
