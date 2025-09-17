@@ -28,5 +28,7 @@ cd python
 zip -r ../lambda_layer.zip .
 cd ..
 
+echo "build done"
+
 # Clean up
 rm -rf python
