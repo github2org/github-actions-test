@@ -38,8 +38,7 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      - setup_remote_docker:
-          version: 20.10.18
+      - setup_remote_docker
       - run:
           name: Install AWS CLI
           command: |
@@ -65,9 +64,10 @@ jobs:
             echo "Changed files:"
             echo "$CHANGED_FILES"
 
+            # Deploy Lambda layer if relevant files changed and layer zip present
             if echo "$CHANGED_FILES" | grep -Eq "^requirements\.txt$|^Dockerfile$|^build_layer.sh$"; then
               if [ ! -f lambda_layer.zip ]; then
-                echo "Error: lambda_layer.zip not found. Layer build might have failed."
+                echo "Error: lambda_layer.zip not found. Layer build may have failed."
                 exit 1
               fi
 
@@ -83,7 +83,7 @@ jobs:
                 --output text \
                 --region $AWS_DEFAULT_REGION)
 
-              echo "Updating Lambda functions to use the new layer version"
+              echo "Updating Lambda functions to use new layer version"
               for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
                 aws lambda update-function-configuration \
                   --function-name "$fn" \
@@ -132,7 +132,11 @@ workflows:
   version: 2
   deploy_on_push:
     jobs:
-      - build_lambda_layer
+      - build_lambda_layer:
+          context: test-env
+          filters:
+            branches:
+              only: main
       - deploy:
           requires:
             - build_lambda_layer
