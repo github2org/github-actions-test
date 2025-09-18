@@ -28,6 +28,11 @@ jobs:
             git fetch --unshallow || true
 
       - run:
+          name: Prepare Lambda layer build directory
+          command: mkdir -p python/lib/python3.13/site-packages
+
+
+      - run:
           name: Smart Deploy - Lambda Functions and Layer
           command: |
             set -e  # exit on error
