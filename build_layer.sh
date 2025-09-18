@@ -41,6 +41,7 @@ fi
 
 # Zip created packages as a Lambda layer package
 echo "Creating lambda_layer.zip"
+echo "done"
 cd python
 zip -r ../lambda_layer.zip .
 cd ..
