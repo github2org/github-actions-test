@@ -21,7 +21,7 @@ echo "docker buildx done"
 
 docker run --rm -v "$PWD/output:/output" \
   --entrypoint /bin/bash \
-  lambda-layer -c "mkdir -p /output/python/python/lib/python3.13/site-packages && cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
+  lambda-layer -c "mkdir -p /output/python/lib/python3.13/site-packages && cp -r /opt/python/* /output/python/lib/python3.13/site-packages/"
 
 echo "docker run done"
 ls -R output   # <--- verify files are there
