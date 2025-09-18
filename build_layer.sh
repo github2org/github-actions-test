@@ -38,4 +38,4 @@ cd output/python
 zip -r ../../lambda_layer.zip .
 cd ../..
 rm -rf output/python
-echo "APPLE"
+echo "Test"
