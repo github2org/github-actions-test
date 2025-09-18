@@ -1,52 +1,41 @@
 #!/bin/bash
 set -e
 
-echo "Starting build_layer.sh"
+# Clean start
+rm -rf output
+mkdir -p output/python/python/lib/python3.13/site-packages
 
-# Clean previous build artifacts
-rm -rf python lambda_layer.zip
+echo "MKDIR WORKED"
 
-# Create the directory structure on host machine before Docker volume mount
-echo "Creating directory structure for Lambda layer on host"
-mkdir -p python/lib/python3.13/site-packages
+pwd   # debug check
+ls -R output   # make sure directory exists
 
-# Build the Docker image with installed dependencies
-echo "Building Docker image for Lambda layer"
+echo "output created"
+
 docker buildx build --platform linux/amd64 \
   --build-arg REQ_FILE=requirements.txt \
   -t lambda-layer \
   --load .
 
-# Copy installed packages from Docker container to host directory via volume mount
-echo "Copying installed packages from Docker container to host"
-docker run --rm -v "$PWD:/output" \
+echo "docker buildx done"
+
+docker run --rm -v "$PWD/output:/output" \
   --entrypoint /bin/bash \
-  lambda-layer -c "cp -r /opt/python/. /output/python/lib/python3.13/site-packages/"
+  lambda-layer -c "mkdir -p /output/python/python/lib/python3.13/site-packages && cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
 
-# Remove unnecessary files to reduce layer size
-echo "Cleaning unnecessary files"
-find python/ -type d -iname "tests" -exec rm -rf {} +
-find python/ -type d -iname "test" -exec rm -rf {} +
-find python/ -type d -name "__pycache__" -exec rm -rf {} +
-find python/ -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
-find python/ -type d -name "*.dist-info" -exec rm -rf {} +
-find python/ -type d -name "*.egg-info" -exec rm -rf {} +
+echo "docker run done"
+ls -R output   # <--- verify files are there
 
-# Ensure site-packages is non-empty before zipping
-echo "Verifying Python packages before zipping"
-if [ -z "$(ls -A python/lib/python3.13/site-packages)" ]; then
-  echo "ERROR: site-packages directory is empty. Aborting layer creation."
-  exit 1
-fi
+# Cleanup inside output/python
+find output/python/ -type d -iname "tests" -exec rm -rf {} +
+find output/python/ -type d -iname "test" -exec rm -rf {} +
+find output/python/ -type d -name "__pycache__" -exec rm -rf {} +
+find output/python/ -type f \( -name ".pyc" -o -name ".pyo" \) -delete
+find output/python/ -type d -name "*.dist-info" -exec rm -rf {} +
+find output/python/ -type d -name "*.egg-info" -exec rm -rf {} +
 
-# Zip created packages as a Lambda layer package
-echo "Creating lambda_layer.zip"
-echo "done"
-cd python
-zip -r ../lambda_layer.zip .
-cd ..
-
-# Clean temporary python folder after zipping
-rm -rf python
-
-echo "Build complete. Lambda layer zip ready: lambda_layer.zip"
+cd output/python
+zip -r ../../lambda_layer.zip .
+cd ../..
+rm -rf output/python
+echo "APPLE"
