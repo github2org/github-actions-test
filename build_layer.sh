@@ -8,7 +8,7 @@ rm -rf python lambda_layer.zip
 
 # Create the directory structure on host machine before Docker volume mount
 echo "Creating directory structure for Lambda layer on host"
-mkdir -p /output/python/lib/python3.13/site-packages
+mkdir -p output/python/lib/python3.13/site-packages
 
 # Build the Docker image with installed dependencies
 echo "Building Docker image for Lambda layer"
