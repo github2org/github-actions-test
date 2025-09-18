@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim 
 
 WORKDIR /opt
 
@@ -6,12 +6,7 @@ ARG REQ_FILE=requirements.txt
 
 COPY ${REQ_FILE} requirements.txt
 
-RUN apt-get update && \
-    apt-get install -y gcc build-essential curl unzip && \
-    pip install --no-deps --no-cache-dir -r requirements.txt -t /opt/python/ && \
-    echo "== DEBUG: INSTALLED CONTENTS ==" && \
-    ls -alh /opt/python && \
-    echo "== END OF CONTENTS ==" && \
-    rm -rf /opt/python/tests || true && \
-    rm -rf /opt/python/**/__pycache__ || true && \
-    find /opt/python/ -name "*.py[co]" -delete || true
+RUN pip install --no-deps --no-cache-dir -r requirements.txt -t python/ && \
+    rm -rf $(ls -d python/* | grep tests) || true && \
+    rm -rf $(ls -d python/* | grep __pycache__) || true && \
+    find python/ -name "*.py[co]" -delete || true
