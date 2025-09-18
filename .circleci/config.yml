@@ -133,14 +133,12 @@ workflows:
   deploy_on_push:
     jobs:
       - build_lambda_layer:
-          context: test-env
           filters:
             branches:
-              only: main
+              only: circleci-project-setup
       - deploy:
           requires:
             - build_lambda_layer
-          context: test-env
           filters:
             branches:
-              only: main
+              only: circleci-project-setup
