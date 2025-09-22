@@ -9,9 +9,9 @@ docker buildx build --platform linux/amd64 \
   -t lambda-layer \
   --load .
 
-docker run --rm -v "$PWD/output:/output" \
+docker run --rm -v "$PWD:/output" \
   --entrypoint /bin/bash \
-  lambda-layer -c "cp -r /opt/python/. /output/python/"
+  lambda-layer -c "chown -R 1000:1000 /opt/python && cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
 
 cd output
 zip -r ../lambda_layer.zip python
