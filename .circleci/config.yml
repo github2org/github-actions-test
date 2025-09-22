@@ -1,24 +1,16 @@
 version: 2.1
 
-executors:
-  docker-executor:
-    docker:
-      - image: circleci/python:3.13
-    working_directory: ~/repo
-
 jobs:
   build_lambda_layer:
-    docker:
-      - image: circleci/python:3.13
+    machine:  # Use machine executor so Docker-in-Docker works
+      image: ubuntu-2204:current
     steps:
       - checkout
       - run:
-          name: Install Docker
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y docker.io
+          name: Install Docker CLI (already pre-installed in machine executor)
+          command: docker --version
       - run:
-          name: Run build_layer.sh
+          name: Build Lambda Layer
           command: |
             chmod +x build_layer.sh
             ./build_layer.sh
@@ -28,6 +20,7 @@ workflows:
   build:
     jobs:
       - build_lambda_layer
+
 
 
 
