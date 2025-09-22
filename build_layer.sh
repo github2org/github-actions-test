@@ -12,6 +12,8 @@ docker run --rm -v "$PWD:/output" \
   --entrypoint /bin/bash \
   lambda-layer -c "cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
 
+chown -R $(id -u):$(id -g) python/  
+
 # Remove test folders
 find python/ -type d -iname "tests" -exec rm -rf {} +
 find python/ -type d -iname "test" -exec rm -rf {} +
