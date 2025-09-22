@@ -133,10 +133,9 @@ workflows:
   deploy_on_push:
     jobs:
       - deploy:
-          context: test-env
           filters:
             branches:
-              only: main
+              only: circleci-project-setup
 
 
 
