@@ -12,12 +12,23 @@ jobs:
           command: docker --version
 
       - run:
-          name: Install AWS CLI v2
+          name: Install AWS CLI v2 if missing
           command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
+            if ! command -v aws >/dev/null 2>&1; then
+              echo "AWS CLI not found, installing..."
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              sudo ./aws/install --update
+            else
+              echo "AWS CLI already installed"
+            fi
             aws --version
+
+      - run:
+          name: Install jq (JSON parser)
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y jq
 
       - run:
           name: Build Lambda Layer
@@ -28,29 +39,24 @@ jobs:
       - run:
           name: Publish Lambda Layer Version
           command: |
-            # Publish new layer version, capture LayerVersionArn from output
             output=$(aws lambda publish-layer-version \
-              --layer-name test-layer \
+              --layer-name your-layer-name \
               --description "Updated lambda layer from CircleCI" \
               --zip-file fileb://lambda_layer.zip \
               --compatible-runtimes python3.13)
 
             echo "$output"
 
-            # Extract LayerVersionArn using jq
             layer_arn=$(echo "$output" | jq -r '.LayerVersionArn')
 
             echo "Published new layer version ARN: $layer_arn"
 
-            # Save LayerVersionArn to CircleCI environment variable for next jobs if needed
             echo "export LAYER_ARN=$layer_arn" >> $BASH_ENV
 
       - run:
           name: Update Lambda Function with New Layer (Optional)
           command: |
-            # If you want to update your Lambda function to use the new layer version,
-            # uncomment below and replace your-function-name
-
+            # Uncomment and replace your-function-name if you want to update the Lambda function here
             # aws lambda update-function-configuration \
             #   --function-name your-function-name \
             #   --layers "$LAYER_ARN"
@@ -60,6 +66,7 @@ workflows:
   build:
     jobs:
       - build_lambda_layer
+
 
 
 
