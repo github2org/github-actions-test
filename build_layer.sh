@@ -9,10 +9,10 @@ docker buildx build --platform linux/amd64 \
   --load .
 
 docker run --rm -v "$PWD:/output" \
+  --user $(id -u):$(id -g) \
   --entrypoint /bin/bash \
-  lambda-layer -c "cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
+  lambda-layer -c "mkdir -p /output/python/python/lib/python3.13/site-packages && cp -r /opt/python/* /output/python/python/lib/python3.13/site-packages/"
 
-chown -R $(id -u):$(id -g) python/  
 
 # Remove test folders
 find python/ -type d -iname "tests" -exec rm -rf {} +
