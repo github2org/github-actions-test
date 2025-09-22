@@ -33,4 +33,4 @@ echo NOONOANONAOANO
 cd python
 zip -r ../lambda_layer.zip .
 cd ..
-rm -rf python
+sudo rm -rf python
