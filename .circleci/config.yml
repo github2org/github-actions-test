@@ -1,7 +1,10 @@
 version: 2.1
 
+orbs:
+  aws-cli: circleci/aws-cli@3.1.4
+
 jobs:
-  build_lambda_layer:
+  deploy:
     machine:
       image: ubuntu-2204:current
     steps:
@@ -28,44 +31,184 @@ jobs:
           name: Install jq (JSON parser)
           command: |
             sudo apt-get update
-            sudo apt-get install -y jq
+            sudo apt-get install -y jq unzip
 
       - run:
-          name: Build Lambda Layer
-          command: |
-            chmod +x build_layer.sh
-            ./build_layer.sh
+          name: Fetch full Git history
+          command: git fetch --unshallow || true
 
       - run:
-          name: Publish Lambda Layer Version
+          name: Deploy - Lambda Functions and Layer
           command: |
-            output=$(aws lambda publish-layer-version \
-              --layer-name your-layer-name \
-              --description "Updated lambda layer from CircleCI" \
-              --zip-file fileb://lambda_layer.zip \
-              --compatible-runtimes python3.13)
+            # Function names and Layer name
+            DATA_CLEAN_FN="owl-uat-data-clean-lambda"
+            DATA_LOAD_FN="owl-uat-data-load-lambda"
+            DATA_PREP_FN="owl-uat-data-prep-and-upload-lambda"
+            LAYER_NAME="owl-uat-lambda-dependencies"
 
-            echo "$output"
+            # Detect changed files in the last commit
+            CHANGED_FILES=$(git diff --name-only $CIRCLE_SHA1 $CIRCLE_SHA1~1)
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
 
-            layer_arn=$(echo "$output" | jq -r '.LayerVersionArn')
+            # Rebuild and deploy layer if relevant files changed
+            if echo "$CHANGED_FILES" | grep -Eq "^build_layer.sh$|^requirements\.txt$|^Dockerfile$"; then
+              echo "Layer-related changes detected. Running build_layer.sh..."
 
-            echo "Published new layer version ARN: $layer_arn"
+              chmod +x build_layer.sh
+              ./build_layer.sh
 
-            echo "export LAYER_ARN=$layer_arn" >> $BASH_ENV
+              if [ -f "lambda_layer.zip" ]; then
+                echo "lambda_layer.zip created. Listing contents:"
+                unzip -l lambda_layer.zip   # <-- List zip contents
 
-      - run:
-          name: Update Lambda Function with New Layer (Optional)
-          command: |
-            # Uncomment and replace your-function-name if you want to update the Lambda function here
-            # aws lambda update-function-configuration \
-            #   --function-name your-function-name \
-            #   --layers "$LAYER_ARN"
+                echo "Publishing new Lambda layer..."
+
+                aws lambda publish-layer-version \
+                  --layer-name "$LAYER_NAME" \
+                  --zip-file fileb://lambda_layer.zip \
+                  --region $AWS_DEFAULT_REGION
+
+                # Get latest layer version ARN (most recent version)
+                LAYER_VERSION_ARN=$(aws lambda list-layer-versions \
+                  --layer-name $LAYER_NAME \
+                  --query 'LayerVersions[0].LayerVersionArn' \
+                  --output text \
+                  --region $AWS_DEFAULT_REGION)
+
+                echo "Updating Lambda functions to use new layer version"
+
+                for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
+                  aws lambda update-function-configuration \
+                    --function-name "$fn" \
+                    --layers "$LAYER_VERSION_ARN" \
+                    --region $AWS_DEFAULT_REGION
+                done
+              else
+                echo "Error: lambda_layer.zip not found after build_layer.sh"
+                exit 1
+              fi
+            else
+              echo "No changes to Lambda layer detected."
+            fi
+
+            # Deploy individual Lambdas if their folders changed
+            if echo "$CHANGED_FILES" | grep -q "^data_clean/"; then
+              echo "Deploying data_clean Lambda..."
+              cd data_clean
+              zip -r ../data_clean.zip .
+              cd ..
+              aws lambda update-function-code \
+                --function-name "$DATA_CLEAN_FN" \
+                --zip-file fileb://data_clean.zip \
+                --region $AWS_DEFAULT_REGION
+            fi
+
+            if echo "$CHANGED_FILES" | grep -q "^data_load/"; then
+              echo "Deploying data_load Lambda..."
+              cd data_load
+              zip -r ../data_load.zip .
+              cd ..
+              aws lambda update-function-code \
+                --function-name "$DATA_LOAD_FN" \
+                --zip-file fileb://data_load.zip \
+                --region $AWS_DEFAULT_REGION
+            fi
+
+            if echo "$CHANGED_FILES" | grep -q "^data_prep/"; then
+              echo "Deploying data_prep Lambda..."
+              cd data_prep
+              zip -r ../data_prep.zip .
+              cd ..
+              aws lambda update-function-code \
+                --function-name "$DATA_PREP_FN" \
+                --zip-file fileb://data_prep.zip \
+                --region $AWS_DEFAULT_REGION
+            fi
+
+            echo "deployment complete."
 
 workflows:
   version: 2
-  build:
+  deploy_on_push:
     jobs:
-      - build_lambda_layer
+      - deploy:
+          context: test-env
+          filters:
+            branches:
+              only: main
+
+
+
+
+# version: 2.1
+
+# jobs:
+#   build_lambda_layer:
+#     machine:
+#       image: ubuntu-2204:current
+#     steps:
+#       - checkout
+
+#       - run:
+#           name: Check Docker CLI version
+#           command: docker --version
+
+#       - run:
+#           name: Install AWS CLI v2 if missing
+#           command: |
+#             if ! command -v aws >/dev/null 2>&1; then
+#               echo "AWS CLI not found, installing..."
+#               curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+#               unzip awscliv2.zip
+#               sudo ./aws/install --update
+#             else
+#               echo "AWS CLI already installed"
+#             fi
+#             aws --version
+
+#       - run:
+#           name: Install jq (JSON parser)
+#           command: |
+#             sudo apt-get update
+#             sudo apt-get install -y jq
+
+#       - run:
+#           name: Build Lambda Layer
+#           command: |
+#             chmod +x build_layer.sh
+#             ./build_layer.sh
+
+#       - run:
+#           name: Publish Lambda Layer Version
+#           command: |
+#             output=$(aws lambda publish-layer-version \
+#               --layer-name your-layer-name \
+#               --description "Updated lambda layer from CircleCI" \
+#               --zip-file fileb://lambda_layer.zip \
+#               --compatible-runtimes python3.13)
+
+#             echo "$output"
+
+#             layer_arn=$(echo "$output" | jq -r '.LayerVersionArn')
+
+#             echo "Published new layer version ARN: $layer_arn"
+
+#             echo "export LAYER_ARN=$layer_arn" >> $BASH_ENV
+
+#       - run:
+#           name: Update Lambda Function with New Layer (Optional)
+#           command: |
+#             # Uncomment and replace your-function-name if you want to update the Lambda function here
+#             # aws lambda update-function-configuration \
+#             #   --function-name your-function-name \
+#             #   --layers "$LAYER_ARN"
+
+# workflows:
+#   version: 2
+#   build:
+#     jobs:
+#       - build_lambda_layer
 
 
 
