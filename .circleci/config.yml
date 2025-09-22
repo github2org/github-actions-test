@@ -1,144 +1,178 @@
 version: 2.1
-orbs:
-  aws-cli: circleci/aws-cli@3.1.4
+
+executors:
+  docker-executor:
+    docker:
+      - image: circleci/python:3.13
+    working_directory: ~/repo
 
 jobs:
   build_lambda_layer:
     docker:
-      - image: cimg/python:3.13
+      - image: circleci/python:3.13
     steps:
       - checkout
-      - setup_remote_docker
       - run:
-          name: Install AWS CLI
+          name: Install Docker
           command: |
             sudo apt-get update
-            sudo apt-get install -y unzip curl
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            aws --version
+            sudo apt-get install -y docker.io
       - run:
-          name: Prepare Directory for Layer Build
-          command: mkdir -p python/lib/python3.13/site-packages
-      - run:
-          name: Build Lambda Layer
+          name: Run build_layer.sh
           command: |
             chmod +x build_layer.sh
             ./build_layer.sh
-      - persist_to_workspace:
-          root: .
-          paths:
-            - lambda_layer.zip
-
-  deploy:
-    docker:
-      - image: cimg/python:3.10
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
-      - setup_remote_docker
-      - run:
-          name: Install AWS CLI
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y unzip curl
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            aws --version
-      - run:
-          name: Fetch full Git history
-          command: git fetch --unshallow || true
-      - run:
-          name: Smart Deploy - Lambda Functions and Layer
-          command: |
-            set -e
-            DATA_CLEAN_FN="owl-uat-data-clean-lambda"
-            DATA_LOAD_FN="owl-uat-data-load-lambda"
-            DATA_PREP_FN="owl-uat-data-prep-and-upload-lambda"
-            LAYER_NAME="owl-uat-lambda-dependencies"
-
-            CHANGED_FILES=$(git diff --name-only $CIRCLE_SHA1 $CIRCLE_SHA1~1)
-            echo "Changed files:"
-            echo "$CHANGED_FILES"
-
-            # Deploy Lambda layer if relevant files changed and layer zip present
-            if echo "$CHANGED_FILES" | grep -Eq "^requirements\.txt$|^Dockerfile$|^build_layer.sh$"; then
-              if [ ! -f lambda_layer.zip ]; then
-                echo "Error: lambda_layer.zip not found. Layer build may have failed."
-                exit 1
-              fi
-
-              echo "Publishing Lambda layer..."
-              aws lambda publish-layer-version \
-                --layer-name "$LAYER_NAME" \
-                --zip-file fileb://lambda_layer.zip \
-                --region $AWS_DEFAULT_REGION
-
-              LAYER_VERSION_ARN=$(aws lambda list-layer-versions \
-                --layer-name $LAYER_NAME \
-                --query 'LayerVersions[0].LayerVersionArn' \
-                --output text \
-                --region $AWS_DEFAULT_REGION)
-
-              echo "Updating Lambda functions to use new layer version"
-              for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
-                aws lambda update-function-configuration \
-                  --function-name "$fn" \
-                  --layers "$LAYER_VERSION_ARN" \
-                  --region $AWS_DEFAULT_REGION
-              done
-            else
-              echo "No changes detected for Lambda layer."
-            fi
-
-            # Deploy individual Lambdas if their folders changed
-            if echo "$CHANGED_FILES" | grep -q "^data_clean/"; then
-              echo "Deploying data_clean Lambda..."
-              cd data_clean
-              zip -r ../data_clean.zip .
-              cd ..
-              aws lambda update-function-code \
-                --function-name "$DATA_CLEAN_FN" \
-                --zip-file fileb://data_clean.zip \
-                --region $AWS_DEFAULT_REGION
-            fi
-            if echo "$CHANGED_FILES" | grep -q "^data_load/"; then
-              echo "Deploying data_load Lambda..."
-              cd data_load
-              zip -r ../data_load.zip .
-              cd ..
-              aws lambda update-function-code \
-                --function-name "$DATA_LOAD_FN" \
-                --zip-file fileb://data_load.zip \
-                --region $AWS_DEFAULT_REGION
-            fi
-            if echo "$CHANGED_FILES" | grep -q "^data_prep/"; then
-              echo "Deploying data_prep Lambda..."
-              cd data_prep
-              zip -r ../data_prep.zip .
-              cd ..
-              aws lambda update-function-code \
-                --function-name "$DATA_PREP_FN" \
-                --zip-file fileb://data_prep.zip \
-                --region $AWS_DEFAULT_REGION
-            fi
-
-            echo "Deployment complete."
 
 workflows:
   version: 2
-  deploy_on_push:
+  build:
     jobs:
-      - build_lambda_layer:
-          filters:
-            branches:
-              only: circleci-project-setup
-      - deploy:
-          requires:
-            - build_lambda_layer
-          filters:
-            branches:
-              only: circleci-project-setup
+      - build_lambda_layer
+
+
+
+
+# version: 2.1
+# orbs:
+#   aws-cli: circleci/aws-cli@3.1.4
+
+# jobs:
+#   build_lambda_layer:
+#     docker:
+#       - image: cimg/python:3.13
+#     steps:
+#       - checkout
+#       - setup_remote_docker
+#       - run:
+#           name: Install AWS CLI
+#           command: |
+#             sudo apt-get update
+#             sudo apt-get install -y unzip curl
+#             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+#             unzip awscliv2.zip
+#             sudo ./aws/install
+#             aws --version
+#       - run:
+#           name: Prepare Directory for Layer Build
+#           command: mkdir -p python/lib/python3.13/site-packages
+#       - run:
+#           name: Build Lambda Layer
+#           command: |
+#             chmod +x build_layer.sh
+#             ./build_layer.sh
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - lambda_layer.zip
+
+#   deploy:
+#     docker:
+#       - image: cimg/python:3.10
+#     steps:
+#       - checkout
+#       - attach_workspace:
+#           at: .
+#       - setup_remote_docker
+#       - run:
+#           name: Install AWS CLI
+#           command: |
+#             sudo apt-get update
+#             sudo apt-get install -y unzip curl
+#             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+#             unzip awscliv2.zip
+#             sudo ./aws/install
+#             aws --version
+#       - run:
+#           name: Fetch full Git history
+#           command: git fetch --unshallow || true
+#       - run:
+#           name: Smart Deploy - Lambda Functions and Layer
+#           command: |
+#             set -e
+#             DATA_CLEAN_FN="owl-uat-data-clean-lambda"
+#             DATA_LOAD_FN="owl-uat-data-load-lambda"
+#             DATA_PREP_FN="owl-uat-data-prep-and-upload-lambda"
+#             LAYER_NAME="owl-uat-lambda-dependencies"
+
+#             CHANGED_FILES=$(git diff --name-only $CIRCLE_SHA1 $CIRCLE_SHA1~1)
+#             echo "Changed files:"
+#             echo "$CHANGED_FILES"
+
+#             # Deploy Lambda layer if relevant files changed and layer zip present
+#             if echo "$CHANGED_FILES" | grep -Eq "^requirements\.txt$|^Dockerfile$|^build_layer.sh$"; then
+#               if [ ! -f lambda_layer.zip ]; then
+#                 echo "Error: lambda_layer.zip not found. Layer build may have failed."
+#                 exit 1
+#               fi
+
+#               echo "Publishing Lambda layer..."
+#               aws lambda publish-layer-version \
+#                 --layer-name "$LAYER_NAME" \
+#                 --zip-file fileb://lambda_layer.zip \
+#                 --region $AWS_DEFAULT_REGION
+
+#               LAYER_VERSION_ARN=$(aws lambda list-layer-versions \
+#                 --layer-name $LAYER_NAME \
+#                 --query 'LayerVersions[0].LayerVersionArn' \
+#                 --output text \
+#                 --region $AWS_DEFAULT_REGION)
+
+#               echo "Updating Lambda functions to use new layer version"
+#               for fn in $DATA_CLEAN_FN $DATA_LOAD_FN $DATA_PREP_FN; do
+#                 aws lambda update-function-configuration \
+#                   --function-name "$fn" \
+#                   --layers "$LAYER_VERSION_ARN" \
+#                   --region $AWS_DEFAULT_REGION
+#               done
+#             else
+#               echo "No changes detected for Lambda layer."
+#             fi
+
+#             # Deploy individual Lambdas if their folders changed
+#             if echo "$CHANGED_FILES" | grep -q "^data_clean/"; then
+#               echo "Deploying data_clean Lambda..."
+#               cd data_clean
+#               zip -r ../data_clean.zip .
+#               cd ..
+#               aws lambda update-function-code \
+#                 --function-name "$DATA_CLEAN_FN" \
+#                 --zip-file fileb://data_clean.zip \
+#                 --region $AWS_DEFAULT_REGION
+#             fi
+#             if echo "$CHANGED_FILES" | grep -q "^data_load/"; then
+#               echo "Deploying data_load Lambda..."
+#               cd data_load
+#               zip -r ../data_load.zip .
+#               cd ..
+#               aws lambda update-function-code \
+#                 --function-name "$DATA_LOAD_FN" \
+#                 --zip-file fileb://data_load.zip \
+#                 --region $AWS_DEFAULT_REGION
+#             fi
+#             if echo "$CHANGED_FILES" | grep -q "^data_prep/"; then
+#               echo "Deploying data_prep Lambda..."
+#               cd data_prep
+#               zip -r ../data_prep.zip .
+#               cd ..
+#               aws lambda update-function-code \
+#                 --function-name "$DATA_PREP_FN" \
+#                 --zip-file fileb://data_prep.zip \
+#                 --region $AWS_DEFAULT_REGION
+#             fi
+
+#             echo "Deployment complete."
+
+# workflows:
+#   version: 2
+#   deploy_on_push:
+#     jobs:
+#       - build_lambda_layer:
+#           filters:
+#             branches:
+#               only: circleci-project-setup
+#       - deploy:
+#           requires:
+#             - build_lambda_layer
+#           filters:
+#             branches:
+#               only: circleci-project-setup
