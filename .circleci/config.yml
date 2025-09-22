@@ -2,24 +2,92 @@ version: 2.1
 
 jobs:
   build_lambda_layer:
-    machine:  # Use machine executor so Docker-in-Docker works
+    machine:
       image: ubuntu-2204:current
     steps:
       - checkout
+
       - run:
-          name: Install Docker CLI (already pre-installed in machine executor)
+          name: Check Docker CLI version
           command: docker --version
+
+      - run:
+          name: Install AWS CLI v2
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            aws --version
+
       - run:
           name: Build Lambda Layer
           command: |
             chmod +x build_layer.sh
             ./build_layer.sh
 
+      - run:
+          name: Publish Lambda Layer Version
+          command: |
+            # Publish new layer version, capture LayerVersionArn from output
+            output=$(aws lambda publish-layer-version \
+              --layer-name test-layer \
+              --description "Updated lambda layer from CircleCI" \
+              --zip-file fileb://lambda_layer.zip \
+              --compatible-runtimes python3.13)
+
+            echo "$output"
+
+            # Extract LayerVersionArn using jq
+            layer_arn=$(echo "$output" | jq -r '.LayerVersionArn')
+
+            echo "Published new layer version ARN: $layer_arn"
+
+            # Save LayerVersionArn to CircleCI environment variable for next jobs if needed
+            echo "export LAYER_ARN=$layer_arn" >> $BASH_ENV
+
+      - run:
+          name: Update Lambda Function with New Layer (Optional)
+          command: |
+            # If you want to update your Lambda function to use the new layer version,
+            # uncomment below and replace your-function-name
+
+            # aws lambda update-function-configuration \
+            #   --function-name your-function-name \
+            #   --layers "$LAYER_ARN"
+
 workflows:
   version: 2
   build:
     jobs:
       - build_lambda_layer
+
+
+
+
+
+
+# version: 2.1
+
+# jobs:
+#   build_lambda_layer:
+#     machine:  # Use machine executor so Docker-in-Docker works
+#       image: ubuntu-2204:current
+#     steps:
+#       - checkout
+#       - run:
+#           name: Install Docker CLI (already pre-installed in machine executor)
+#           command: docker --version
+#       - run:
+#           name: Build Lambda Layer
+#           command: |
+#             chmod +x build_layer.sh
+#             ./build_layer.sh
+
+# workflows:
+#   version: 2
+#   build:
+#     jobs:
+#       - build_lambda_layer
 
 
 
